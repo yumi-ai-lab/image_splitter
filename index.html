@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:sans-serif;padding:12px;background:transparent;overscroll-behavior:none;touch-action:manipulation;}
+html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+input,textarea,select,button{-webkit-user-select:auto;user-select:auto;}
+img,canvas,div{-webkit-user-drag:none;}
 body.dragging,body.dragging *{user-select:none!important;-webkit-user-select:none!important;-webkit-touch-callout:none!important}
 #wrap,#wrap *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 #wrap-viewport,#wrap,#ic,#lc{touch-action:none;overscroll-behavior:none;}
-#wrap-viewport{touch-action:pan-y pinch-zoom;}
-#ov{touch-action:auto;overscroll-behavior:none;}
+#wrap-viewport{touch-action:none;}
+#ov{touch-action:none;overscroll-behavior:none;}
 #dz{border:2px dashed #ccc;border-radius:10px;padding:2rem;text-align:center;cursor:pointer;background:#f7f7f7;margin-bottom:12px;transition:.2s}
 #dz:hover,#dz.ov{border-color:#888;background:#eee}
 #dz p{color:#888;font-size:14px;margin-top:6px}
@@ -194,6 +197,7 @@ function fitToView(){
   vpScale=Math.min(vw/dW,vh/dH,1);
   vpTx=(vw-dW*vpScale)/2;
   vpTy=(vh-dH*vpScale)/2;
+  clampTransform();
   applyTransform();
 }
 
@@ -205,8 +209,9 @@ function vpToCanvas(cx,cy){
 
 // ---- pan/pinch state ----
 var _touches={};  // active touches by id
-var _panStart=null;  // {tx,ty,cx,cy} for 1-finger pan
-var _pinchStart=null; // {dist,scale,mx,my,tx,ty} for 2-finger pinch
+var _panStart=null;
+var _pinchStart=null;
+var _winPinchStart=null;
 
 function getTouches(e){
   var out=[];
@@ -239,6 +244,20 @@ function onVPTouchStart(e){
 
 function onVPTouchMove(e){
   var ts=getTouches(e);
+  // 窓ピンチ（窓の上で2本指→窓サイズ変更）
+  if(_winPinchStart&&ts.length>=2){
+    e.preventDefault();
+    var ww=null;for(var i=0;i<wins.length;i++){if(wins[i].id===_winPinchStart.id){ww=wins[i];break;}}
+    if(ww){
+      var ratio=dist2(ts[0],ts[1])/_winPinchStart.dist;
+      ww.w=Math.min(dW,Math.max(40,Math.round(_winPinchStart.w*ratio)));
+      ww.h=Math.min(dH,Math.max(40,Math.round(_winPinchStart.h*ratio)));
+      ww.x=Math.max(0,Math.min(dW-ww.w,Math.round(_winPinchStart.cx-ww.w/2)));
+      ww.y=Math.max(0,Math.min(dH-ww.h,Math.round(_winPinchStart.cy-ww.h/2)));
+      render();updSt();
+    }
+    return;
+  }
   if(ts.length>=2){
     e.preventDefault();
     // ピンチ中は窓操作を強制停止
@@ -270,12 +289,11 @@ function onVPTouchMove(e){
 function onVPTouchEnd(e){
   var ts=getTouches(e);
   if(ts.length===0){
-    _panStart=null;_pinchStart=null;
+    _panStart=null;_pinchStart=null;_winPinchStart=null;
+    unlockPageDrag();
     VP.classList.remove('panning');
   } else if(ts.length===1){
-    // ピンチ終了後の1本指は自動パンしない（誤動作防止）
-    // 新たにtouchstartが来てから初めてパン開始する
-    _pinchStart=null;
+    _pinchStart=null;_winPinchStart=null;
     _panStart=null;
   }
 }
@@ -296,7 +314,7 @@ function onVPWheel(e){
 }
 
 function lockPageDrag(){document.body.classList.add('dragging');if(VP)VP.style.touchAction='none';}
-function unlockPageDrag(){document.body.classList.remove('dragging');if(VP)VP.style.touchAction='pan-y pinch-zoom';}
+function unlockPageDrag(){document.body.classList.remove('dragging');if(VP)VP.style.touchAction='none';}
 function stopNative(e){if(e&&e.cancelable)e.preventDefault();if(e)e.stopPropagation();}
 function capturePointer(el,e){if(e.pointerId!=null){try{el.setPointerCapture(e.pointerId);}catch(_){}}}
 var IC=document.getElementById('ic'),xc=IC.getContext('2d');
@@ -419,6 +437,18 @@ h.addEventListener('pointerdown',function(e){if(e.pointerType==='mouse')return;e
 function startMove(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'move',wid:w.id,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
 el.addEventListener('mousedown',function(e){if(w.locked||e.target!==el)return;stopNative(e);startMove(e.clientX,e.clientY);});
 el.addEventListener('pointerdown',function(e){if(e.pointerType==='mouse'||w.locked||e.target!==el)return;e.preventDefault();e.stopPropagation();capturePointer(el,e);lockPageDrag();startMove(e.clientX,e.clientY);});
+el.addEventListener('touchstart',function(e){
+  if(w.locked)return;
+  if(e.touches.length>=2){
+    e.preventDefault();e.stopPropagation();
+    var ts=getTouches(e);
+    _winPinchStart={id:w.id,dist:dist2(ts[0],ts[1]),cx:w.x+w.w/2,cy:w.y+w.h/2,x:w.x,y:w.y,w:w.w,h:w.h};
+    drag=null;lsDraw=false;lockPageDrag();
+    return;
+  }
+  if(e.target!==el)return;
+  e.preventDefault();startMove(e.touches[0].clientX,e.touches[0].clientY);
+},{passive:false});
 OV.appendChild(el);}
 
 LC.addEventListener('mousedown',function(e){if(mode!=='windows'||!lasso)return;var cc=vpToCanvas(e.clientX,e.clientY);lsDraw=true;drag=null;ls0={x:Math.round(cc.x),y:Math.round(cc.y)};ls1={x:ls0.x,y:ls0.y};e.stopPropagation();e.preventDefault();});
@@ -461,6 +491,7 @@ document.addEventListener('pointercancel',function(){unlockPageDrag();if(drag){d
 window.addEventListener('pointercancel',function(){drag=null;lsDraw=false;unlockPageDrag();});
 document.addEventListener('selectstart',function(e){if(drag||lsDraw)stopNative(e);});
 document.addEventListener('contextmenu',function(e){if(drag||lsDraw)stopNative(e);});
+VP.addEventListener('contextmenu',function(e){e.preventDefault();});
 function drawLasso(){lx.clearRect(0,0,dW,dH);var x1=Math.min(ls0.x,ls1.x),y1=Math.min(ls0.y,ls1.y),w=Math.abs(ls1.x-ls0.x),h=Math.abs(ls1.y-ls0.y);lx.strokeStyle='rgba(40,200,130,.9)';lx.lineWidth=2;lx.setLineDash([5,3]);lx.strokeRect(x1,y1,w,h);lx.fillStyle='rgba(40,200,130,.1)';lx.fillRect(x1,y1,w,h);}
 function updSt(){var st=document.getElementById('st');if(!img){st.textContent='';return;}if(mode==='grid'||mode==='lines'){var c=vL.length+1,r=hL.length+1;st.textContent=c+'列×'+r+'行='+(c*r)+'パーツ';}else if(lasso)st.textContent='🖱 ドラッグで囲む — '+wins.length+'個';else{var lk=wins.filter(function(w){return w.locked;}).length;st.textContent='窓 '+wins.length+'個'+(lk?' (ロック '+lk+'個)':'');}}
 
