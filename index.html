@@ -4,7 +4,9 @@
 body{font-family:sans-serif;padding:12px;background:transparent;overscroll-behavior:none;touch-action:manipulation;}
 body.dragging,body.dragging *{user-select:none!important;-webkit-user-select:none!important;-webkit-touch-callout:none!important}
 #wrap,#wrap *{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-#wrap-viewport,#wrap,#ic,#ov,#lc{touch-action:none;overscroll-behavior:none;}
+#wrap-viewport,#wrap,#ic,#lc{touch-action:none;overscroll-behavior:none;}
+#wrap-viewport{touch-action:pan-y pinch-zoom;}
+#ov{touch-action:auto;overscroll-behavior:none;}
 #dz{border:2px dashed #ccc;border-radius:10px;padding:2rem;text-align:center;cursor:pointer;background:#f7f7f7;margin-bottom:12px;transition:.2s}
 #dz:hover,#dz.ov{border-color:#888;background:#eee}
 #dz p{color:#888;font-size:14px;margin-top:6px}
@@ -215,58 +217,66 @@ function dist2(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
 function mid2(a,b){return{x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
 
 function onVPTouchStart(e){
-  if(drag)return; // window drag takes priority
   var ts=getTouches(e);
+  // 2本指は最優先でピンチズーム（窓操作中でも強制キャンセル）
+  if(ts.length>=2){
+    e.preventDefault();
+    drag=null;lsDraw=false;unlockPageDrag();
+    _pinchStart={dist:dist2(ts[0],ts[1]),scale:vpScale,tx:vpTx,ty:vpTy,mid:mid2(ts[0],ts[1])};
+    _panStart=null;
+    VP.classList.add('panning');
+    return;
+  }
+  // 1本指パンは背景のみ（窓・ハンドルは各自のpointerdownで処理）
   if(ts.length===1){
-    // check if touch is on a window handle → let mkWin handle it
     if(e.target!==VP&&e.target!==WRAP&&e.target!==IC)return;
     e.preventDefault();
     _panStart={tx:vpTx,ty:vpTy,cx:ts[0].clientX,cy:ts[0].clientY};
     _pinchStart=null;
-    VP.classList.add('panning');
-  } else if(ts.length===2){
-    e.preventDefault();
-    _pinchStart={dist:dist2(ts[0],ts[1]),scale:vpScale,tx:vpTx,ty:vpTy,
-      mid:mid2(ts[0],ts[1])};
-    _panStart=null;
     VP.classList.add('panning');
   }
 }
 
 function onVPTouchMove(e){
   var ts=getTouches(e);
-  if(_pinchStart&&ts.length>=2){
+  if(ts.length>=2){
     e.preventDefault();
+    // ピンチ中は窓操作を強制停止
+    drag=null;lsDraw=false;unlockPageDrag();
+    if(!_pinchStart){
+      _pinchStart={dist:dist2(ts[0],ts[1]),scale:vpScale,tx:vpTx,ty:vpTy,mid:mid2(ts[0],ts[1])};
+      return;
+    }
     var d=dist2(ts[0],ts[1]);
     var m=mid2(ts[0],ts[1]);
     var r=VP.getBoundingClientRect();
     var newScale=Math.max(0.1,Math.min(10,_pinchStart.scale*(d/_pinchStart.dist)));
-    // zoom around pinch midpoint
     var ox=m.x-r.left, oy=m.y-r.top;
     var ratio=newScale/_pinchStart.scale;
     vpTx=ox-(ox-_pinchStart.tx)*ratio;
     vpTy=oy-(oy-_pinchStart.ty)*ratio;
     vpScale=newScale;
-    clampTransform();
-    applyTransform();
-  } else if(_panStart&&ts.length===1){
+    clampTransform();applyTransform();
+    return;
+  }
+  if(_panStart&&ts.length===1){
     e.preventDefault();
     vpTx=_panStart.tx+(ts[0].clientX-_panStart.cx);
     vpTy=_panStart.ty+(ts[0].clientY-_panStart.cy);
-    clampTransform();
-    applyTransform();
+    clampTransform();applyTransform();
   }
 }
 
 function onVPTouchEnd(e){
-  if(getTouches(e).length===0){
+  var ts=getTouches(e);
+  if(ts.length===0){
     _panStart=null;_pinchStart=null;
     VP.classList.remove('panning');
-  } else if(getTouches(e).length===1&&_pinchStart){
-    // fingers reduced to 1: switch to pan
-    var ts=getTouches(e);
-    _panStart={tx:vpTx,ty:vpTy,cx:ts[0].clientX,cy:ts[0].clientY};
+  } else if(ts.length===1){
+    // ピンチ終了後の1本指は自動パンしない（誤動作防止）
+    // 新たにtouchstartが来てから初めてパン開始する
     _pinchStart=null;
+    _panStart=null;
   }
 }
 
@@ -285,8 +295,8 @@ function onVPWheel(e){
   applyTransform();
 }
 
-function lockPageDrag(){document.body.classList.add('dragging');}
-function unlockPageDrag(){document.body.classList.remove('dragging');}
+function lockPageDrag(){document.body.classList.add('dragging');if(VP)VP.style.touchAction='none';}
+function unlockPageDrag(){document.body.classList.remove('dragging');if(VP)VP.style.touchAction='pan-y pinch-zoom';}
 function stopNative(e){if(e&&e.cancelable)e.preventDefault();if(e)e.stopPropagation();}
 function capturePointer(el,e){if(e.pointerId!=null){try{el.setPointerCapture(e.pointerId);}catch(_){}}}
 var IC=document.getElementById('ic'),xc=IC.getContext('2d');
@@ -448,6 +458,7 @@ document.addEventListener('touchend',function(){unlockPageDrag();if(drag){drag=n
 document.addEventListener('touchcancel',function(){unlockPageDrag();if(drag){drag=null;updSt();}});
 document.addEventListener('pointerup',function(){unlockPageDrag();if(drag){drag=null;updSt();}});
 document.addEventListener('pointercancel',function(){unlockPageDrag();if(drag){drag=null;updSt();}});
+window.addEventListener('pointercancel',function(){drag=null;lsDraw=false;unlockPageDrag();});
 document.addEventListener('selectstart',function(e){if(drag||lsDraw)stopNative(e);});
 document.addEventListener('contextmenu',function(e){if(drag||lsDraw)stopNative(e);});
 function drawLasso(){lx.clearRect(0,0,dW,dH);var x1=Math.min(ls0.x,ls1.x),y1=Math.min(ls0.y,ls1.y),w=Math.abs(ls1.x-ls0.x),h=Math.abs(ls1.y-ls0.y);lx.strokeStyle='rgba(40,200,130,.9)';lx.lineWidth=2;lx.setLineDash([5,3]);lx.strokeRect(x1,y1,w,h);lx.fillStyle='rgba(40,200,130,.1)';lx.fillRect(x1,y1,w,h);}
