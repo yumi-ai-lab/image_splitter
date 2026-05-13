@@ -394,9 +394,37 @@ function mkLine(type,pos,idx){
   el.addEventListener('dblclick',function(e){e.stopPropagation();if(type==='v')vL.splice(idx,1);else hL.splice(idx,1);render();updSt();});
   OV.appendChild(el);
 }
-function mkWin(w){var col=w.locked?'#f90':'#2c8';var el=document.createElement('div');el.dataset.wid=w.id;el.style.cssText='position:absolute;left:'+w.x+'px;top:'+w.y+'px;width:'+w.w+'px;height:'+w.h+'px;border:2px solid '+col+';background:'+(w.locked?'rgba(255,160,0,.06)':'rgba(40,200,130,.08)')+';cursor:'+(w.locked?'not-allowed':'move')+';touch-action:none;user-select:none;';if(w.label){var lb=document.createElement('div');lb.textContent=w.label;lb.style.cssText='position:absolute;bottom:3px;left:4px;right:22px;font-size:11px;color:'+(w.locked?'#c80':'#080')+';font-weight:600;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';el.appendChild(lb);}var idl=document.createElement('div');idl.textContent='W'+w.id;idl.style.cssText='position:absolute;top:2px;left:4px;font-size:11px;font-weight:600;color:'+(w.locked?'#c80':'#080')+';pointer-events:none;';el.appendChild(idl);var lk=document.createElement('div');lk.textContent=w.locked?'🔒':'🔓';
-lk.style.cssText='position:absolute;top:-10px;right:32px;width:28px;height:28px;font-size:16px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.9);border:1px solid #ddd;border-radius:50%;cursor:pointer;touch-action:none;z-index:5;';
-lk.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();w.locked=!w.locked;render();});el.appendChild(lk);var cp=document.createElement('div');cp.textContent='⧉';cp.title='複製';cp.style.cssText='position:absolute;top:1px;right:19px;font-size:13px;cursor:pointer;color:#048;font-weight:700;line-height:1;';cp.addEventListener('mousedown',function(e){e.stopPropagation();});cp.addEventListener('click',function(e){e.stopPropagation();var ox=Math.min(w.x+12,dW-w.w),oy=Math.min(w.y+12,dH-w.h);wins.push({id:nid++,x:ox,y:oy,w:w.w,h:w.h,locked:false,label:w.label});render();updSt();});el.appendChild(cp);var dl=document.createElement('div');dl.textContent='✕';dl.style.cssText='position:absolute;top:1px;right:3px;font-size:12px;cursor:pointer;color:#c00;font-weight:700;';dl.addEventListener('mousedown',function(e){e.stopPropagation();});dl.addEventListener('click',function(e){e.stopPropagation();wins=wins.filter(function(x){return x.id!==w.id;});render();updSt();});el.appendChild(dl);
+function mkWin(w){
+var col=w.locked?'#f90':'#2c8';
+var el=document.createElement('div');el.dataset.wid=w.id;
+el.style.cssText='position:absolute;left:'+w.x+'px;top:'+w.y+'px;width:'+w.w+'px;height:'+w.h+'px;border:2px solid '+col+';background:'+(w.locked?'rgba(255,160,0,.06)':'rgba(40,200,130,.08)')+';cursor:'+(w.locked?'not-allowed':'move')+';touch-action:none;user-select:none;';
+// ラベル
+if(w.label){var lb=document.createElement('div');lb.textContent=w.label;lb.style.cssText='position:absolute;bottom:4px;left:6px;right:6px;font-size:11px;color:'+(w.locked?'#c80':'#080')+';font-weight:600;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';el.appendChild(lb);}
+// 窓ID
+var idl=document.createElement('div');idl.textContent='W'+w.id;idl.style.cssText='position:absolute;top:14px;left:6px;font-size:11px;font-weight:600;color:'+(w.locked?'#c80':'#080')+';pointer-events:none;';el.appendChild(idl);
+// 上部ボタンバー (高さ52px)
+var bar=document.createElement('div');
+bar.style.cssText='position:absolute;top:-26px;right:-2px;display:flex;flex-direction:row;gap:2px;z-index:20;';
+// ボタン共通スタイル
+var BTN='width:48px;height:48px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.95);border:1px solid #ddd;border-radius:10px;cursor:pointer;touch-action:manipulation;flex-shrink:0;';
+// 🔒 鍵
+var lk=document.createElement('div');lk.innerHTML='<span style="font-size:18px;pointer-events:none">'+(w.locked?'🔒':'🔓')+'</span>';
+lk.style.cssText=BTN;
+lk.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();w.locked=!w.locked;render();});
+bar.appendChild(lk);
+// ⧉ 複製
+var cp=document.createElement('div');cp.innerHTML='<span style="font-size:18px;pointer-events:none;color:#048;font-weight:700">⧉</span>';
+cp.title='複製';cp.style.cssText=BTN;
+cp.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();var ox=Math.min(w.x+12,dW-w.w),oy=Math.min(w.y+12,dH-w.h);wins.push({id:nid++,x:ox,y:oy,w:w.w,h:w.h,locked:false,label:w.label});render();updSt();});
+cp.addEventListener('click',function(e){e.stopPropagation();});
+bar.appendChild(cp);
+// ✕ 削除
+var dl=document.createElement('div');dl.innerHTML='<span style="font-size:18px;pointer-events:none;color:#c00;font-weight:700">✕</span>';
+dl.style.cssText=BTN;
+dl.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();wins=wins.filter(function(x){return x.id!==w.id;});render();updSt();});
+dl.addEventListener('click',function(e){e.stopPropagation();});
+bar.appendChild(dl);
+el.appendChild(bar);
 // コーナーハンドル（スマホ向け大きめ）
 var HIT=40,VIS=14;
 [{cx:0,cy:0,t:'nw'},{cx:w.w,cy:0,t:'ne'},{cx:0,cy:w.h,t:'sw'},{cx:w.w,cy:w.h,t:'se'}].forEach(function(c){var h=document.createElement('div');h.dataset.corner=c.t;h.style.cssText='position:absolute;left:'+(c.cx-HIT/2)+'px;top:'+(c.cy-HIT/2)+'px;width:'+HIT+'px;height:'+HIT+'px;cursor:'+(w.locked?'not-allowed':c.t+'-resize')+';touch-action:none;z-index:4;';var dot=document.createElement('div');dot.style.cssText='position:absolute;left:50%;top:50%;width:'+VIS+'px;height:'+VIS+'px;transform:translate(-50%,-50%);border-radius:50%;background:#fff;border:2px solid '+col+';pointer-events:none;';h.appendChild(dot);function startResize(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'corner',wid:w.id,type:c.t,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
