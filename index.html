@@ -186,9 +186,11 @@ function applyTransform(){
 function clampTransform(){
   var vw=VP.offsetWidth,vh=VP.offsetHeight;
   var iw=dW*vpScale,ih=dH*vpScale;
-  // allow some overscroll (20px) but keep content visible
-  vpTx=Math.min(20,Math.max(vw-iw-20,vpTx));
-  vpTy=Math.min(20,Math.max(vh-ih-20,vpTy));
+  var margin=80;
+  if(iw<=vw){vpTx=(vw-iw)/2;}
+  else{vpTx=Math.min(margin,Math.max(vw-iw-margin,vpTx));}
+  if(ih<=vh){vpTy=(vh-ih)/2;}
+  else{vpTy=Math.min(margin,Math.max(vh-ih-margin,vpTy));}
 }
 
 function fitToView(){
@@ -234,7 +236,7 @@ function onVPTouchStart(e){
   }
   // 1本指パンは背景のみ（窓・ハンドルは各自のpointerdownで処理）
   if(ts.length===1){
-    if(e.target!==VP&&e.target!==WRAP&&e.target!==IC)return;
+    if(e.target!==VP&&e.target!==WRAP&&e.target!==IC&&e.target!==OV)return;
     e.preventDefault();
     _panStart={tx:vpTx,ty:vpTy,cx:ts[0].clientX,cy:ts[0].clientY};
     _pinchStart=null;
@@ -254,7 +256,7 @@ function onVPTouchMove(e){
       ww.h=Math.min(dH,Math.max(40,Math.round(_winPinchStart.h*ratio)));
       ww.x=Math.max(0,Math.min(dW-ww.w,Math.round(_winPinchStart.cx-ww.w/2)));
       ww.y=Math.max(0,Math.min(dH-ww.h,Math.round(_winPinchStart.cy-ww.h/2)));
-      render();updSt();
+      updateWinDOMRaf(ww);
     }
     return;
   }
@@ -414,6 +416,21 @@ function ro(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>
 function cMove(mv,nx,ny,nw,nh){var fx=Math.max(0,Math.min(dW-nw,nx)),fy=Math.max(0,Math.min(dH-nh,ny));if(!document.getElementById('nop').checked)return{x:fx,y:fy};var m=2,ot=wins.filter(function(w){return w.id!==mv.id;});function hit(x,y){return ot.some(function(w){return ro(x,y,nw,nh,w.x-m,w.y-m,w.w+m*2,w.h+m*2);});}if(!hit(fx,fy))return{x:fx,y:fy};if(!hit(fx,mv.y))return{x:fx,y:mv.y};if(!hit(mv.x,fy))return{x:mv.x,y:fy};return{x:mv.x,y:mv.y};}
 function cSize(mv,nx,ny,nw,nh){var fx=Math.max(0,nx),fy=Math.max(0,ny),fw=Math.max(20,Math.min(dW-fx,nw)),fh=Math.max(20,Math.min(dH-fy,nh));if(!document.getElementById('nop').checked)return{x:fx,y:fy,w:fw,h:fh};var m=2,ot=wins.filter(function(w){return w.id!==mv.id;});if(!ot.some(function(w){return ro(fx,fy,fw,fh,w.x-m,w.y-m,w.w+m*2,w.h+m*2);}))return{x:fx,y:fy,w:fw,h:fh};return{x:mv.x,y:mv.y,w:mv.w,h:mv.h};}
 
+var _rafPending=false;
+function renderRaf(){if(_rafPending)return;_rafPending=true;requestAnimationFrame(function(){_rafPending=false;render();});}
+// ドラッグ/ピンチ中: 対象窓DOMのみ直接更新（全再生成なし）
+function updateWinDOMRaf(w){
+  requestAnimationFrame(function(){
+    var el=OV.querySelector('[data-wid="'+w.id+'"]');
+    if(!el)return;
+    el.style.left=w.x+'px';el.style.top=w.y+'px';
+    el.style.width=w.w+'px';el.style.height=w.h+'px';
+    // コーナーハンドル位置更新
+    var corners=el.querySelectorAll('[data-corner]');
+    var cpos=[{t:'nw',cx:0,cy:0},{t:'ne',cx:w.w,cy:0},{t:'sw',cx:0,cy:w.h},{t:'se',cx:w.w,cy:w.h}];
+    corners.forEach(function(h){var cp=cpos.find(function(c){return c.t===h.dataset.corner;});if(cp){h.style.left=(cp.cx-11)+'px';h.style.top=(cp.cy-11)+'px';}});
+  });
+}
 function render(){OV.innerHTML='';if(mode==='grid'||mode==='lines'){vL.forEach(function(x,i){mkLine('v',x,i);});hL.forEach(function(y,i){mkLine('h',y,i);});}if(mode==='windows')wins.forEach(function(w){mkWin(w);});}
 function mkLine(type,pos,idx){
   var el=document.createElement('div');
@@ -424,9 +441,9 @@ function mkLine(type,pos,idx){
   el.addEventListener('dblclick',function(e){e.stopPropagation();if(type==='v')vL.splice(idx,1);else hL.splice(idx,1);render();updSt();});
   OV.appendChild(el);
 }
-function mkWin(w){var col=w.locked?'#f90':'#2c8';var el=document.createElement('div');el.style.cssText='position:absolute;left:'+w.x+'px;top:'+w.y+'px;width:'+w.w+'px;height:'+w.h+'px;border:2px solid '+col+';background:'+(w.locked?'rgba(255,160,0,.06)':'rgba(40,200,130,.08)')+';cursor:'+(w.locked?'not-allowed':'move')+';touch-action:none;user-select:none;';if(w.label){var lb=document.createElement('div');lb.textContent=w.label;lb.style.cssText='position:absolute;bottom:3px;left:4px;right:22px;font-size:11px;color:'+(w.locked?'#c80':'#080')+';font-weight:600;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';el.appendChild(lb);}var idl=document.createElement('div');idl.textContent='W'+w.id;idl.style.cssText='position:absolute;top:2px;left:4px;font-size:11px;font-weight:600;color:'+(w.locked?'#c80':'#080')+';pointer-events:none;';el.appendChild(idl);var lk=document.createElement('div');lk.textContent=w.locked?'🔒':'🔓';lk.style.cssText='position:absolute;top:1px;right:36px;font-size:12px;cursor:pointer;';lk.addEventListener('mousedown',function(e){e.stopPropagation();});lk.addEventListener('click',function(e){e.stopPropagation();w.locked=!w.locked;render();});el.appendChild(lk);var cp=document.createElement('div');cp.textContent='⧉';cp.title='複製';cp.style.cssText='position:absolute;top:1px;right:19px;font-size:13px;cursor:pointer;color:#048;font-weight:700;line-height:1;';cp.addEventListener('mousedown',function(e){e.stopPropagation();});cp.addEventListener('click',function(e){e.stopPropagation();var ox=Math.min(w.x+12,dW-w.w),oy=Math.min(w.y+12,dH-w.h);wins.push({id:nid++,x:ox,y:oy,w:w.w,h:w.h,locked:false,label:w.label});render();updSt();});el.appendChild(cp);var dl=document.createElement('div');dl.textContent='✕';dl.style.cssText='position:absolute;top:1px;right:3px;font-size:12px;cursor:pointer;color:#c00;font-weight:700;';dl.addEventListener('mousedown',function(e){e.stopPropagation();});dl.addEventListener('click',function(e){e.stopPropagation();wins=wins.filter(function(x){return x.id!==w.id;});render();updSt();});el.appendChild(dl);
+function mkWin(w){var col=w.locked?'#f90':'#2c8';var el=document.createElement('div');el.dataset.wid=w.id;el.style.cssText='position:absolute;left:'+w.x+'px;top:'+w.y+'px;width:'+w.w+'px;height:'+w.h+'px;border:2px solid '+col+';background:'+(w.locked?'rgba(255,160,0,.06)':'rgba(40,200,130,.08)')+';cursor:'+(w.locked?'not-allowed':'move')+';touch-action:none;user-select:none;';if(w.label){var lb=document.createElement('div');lb.textContent=w.label;lb.style.cssText='position:absolute;bottom:3px;left:4px;right:22px;font-size:11px;color:'+(w.locked?'#c80':'#080')+';font-weight:600;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';el.appendChild(lb);}var idl=document.createElement('div');idl.textContent='W'+w.id;idl.style.cssText='position:absolute;top:2px;left:4px;font-size:11px;font-weight:600;color:'+(w.locked?'#c80':'#080')+';pointer-events:none;';el.appendChild(idl);var lk=document.createElement('div');lk.textContent=w.locked?'🔒':'🔓';lk.style.cssText='position:absolute;top:1px;right:36px;font-size:12px;cursor:pointer;';lk.addEventListener('mousedown',function(e){e.stopPropagation();});lk.addEventListener('click',function(e){e.stopPropagation();w.locked=!w.locked;render();});el.appendChild(lk);var cp=document.createElement('div');cp.textContent='⧉';cp.title='複製';cp.style.cssText='position:absolute;top:1px;right:19px;font-size:13px;cursor:pointer;color:#048;font-weight:700;line-height:1;';cp.addEventListener('mousedown',function(e){e.stopPropagation();});cp.addEventListener('click',function(e){e.stopPropagation();var ox=Math.min(w.x+12,dW-w.w),oy=Math.min(w.y+12,dH-w.h);wins.push({id:nid++,x:ox,y:oy,w:w.w,h:w.h,locked:false,label:w.label});render();updSt();});el.appendChild(cp);var dl=document.createElement('div');dl.textContent='✕';dl.style.cssText='position:absolute;top:1px;right:3px;font-size:12px;cursor:pointer;color:#c00;font-weight:700;';dl.addEventListener('mousedown',function(e){e.stopPropagation();});dl.addEventListener('click',function(e){e.stopPropagation();wins=wins.filter(function(x){return x.id!==w.id;});render();updSt();});el.appendChild(dl);
 // コーナーハンドル（スマホ向け大きめ）
-[{cx:0,cy:0,t:'nw'},{cx:w.w,cy:0,t:'ne'},{cx:0,cy:w.h,t:'sw'},{cx:w.w,cy:w.h,t:'se'}].forEach(function(c){var h=document.createElement('div');h.style.cssText='position:absolute;left:'+(c.cx-11)+'px;top:'+(c.cy-11)+'px;width:22px;height:22px;border-radius:50%;background:'+col+';cursor:'+(w.locked?'not-allowed':c.t+'-resize')+';touch-action:none;';function startResize(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'corner',wid:w.id,type:c.t,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
+[{cx:0,cy:0,t:'nw'},{cx:w.w,cy:0,t:'ne'},{cx:0,cy:w.h,t:'sw'},{cx:w.w,cy:w.h,t:'se'}].forEach(function(c){var h=document.createElement('div');h.dataset.corner=c.t;h.style.cssText='position:absolute;left:'+(c.cx-11)+'px;top:'+(c.cy-11)+'px;width:22px;height:22px;border-radius:50%;background:'+col+';cursor:'+(w.locked?'not-allowed':c.t+'-resize')+';touch-action:none;';function startResize(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'corner',wid:w.id,type:c.t,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
 h.addEventListener('mousedown',function(e){stopNative(e);startResize(e.clientX,e.clientY);});
 h.addEventListener('pointerdown',function(e){if(e.pointerType==='mouse')return;e.preventDefault();e.stopPropagation();capturePointer(h,e);lockPageDrag();startResize(e.clientX,e.clientY);});el.appendChild(h);});
 // 辺ハンドル（スマホ向け大きめ）
@@ -471,13 +488,13 @@ document.addEventListener('touchmove',function(e){
   var cc=vpToCanvas(e.touches[0].clientX,e.touches[0].clientY);applyDrag(cc.x,cc.y);
 },{passive:false});
 function applyDrag(cx,cy){
-  if(drag.kind==='line'){if(drag.type==='v')vL[drag.idx]=Math.max(1,Math.min(dW-1,Math.round(cx)));else hL[drag.idx]=Math.max(1,Math.min(dH-1,Math.round(cy)));render();return;}
+  if(drag.kind==='line'){if(drag.type==='v')vL[drag.idx]=Math.max(1,Math.min(dW-1,Math.round(cx)));else hL[drag.idx]=Math.max(1,Math.min(dH-1,Math.round(cy)));renderRaf();return;}
   var w=null;for(var i=0;i<wins.length;i++){if(wins[i].id===drag.wid){w=wins[i];break;}}if(!w)return;
   var dx=cx-drag.startX,dy=cy-drag.startY,nx,ny,nw,nh,res,rw,rh;
   if(drag.kind==='move'){res=cMove(w,drag.ox+dx,drag.oy+dy,w.w,w.h);w.x=res.x;w.y=res.y;}
   else if(drag.kind==='corner'){nx=w.x;ny=w.y;nw=w.w;nh=w.h;if(drag.type==='se'){nw=Math.max(20,drag.ow+dx);nh=Math.max(20,drag.oh+dy);}else if(drag.type==='sw'){rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;nh=Math.max(20,drag.oh+dy);}else if(drag.type==='ne'){nw=Math.max(20,drag.ow+dx);rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}else{rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}res=cSize(w,nx,ny,nw,nh);w.x=res.x;w.y=res.y;w.w=res.w;w.h=res.h;}
   else if(drag.kind==='edge'){nx=w.x;ny=w.y;nw=w.w;nh=w.h;if(drag.edge==='right')nw=Math.max(20,drag.ow+dx);else if(drag.edge==='bottom')nh=Math.max(20,drag.oh+dy);else if(drag.edge==='left'){rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;}else{rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}res=cSize(w,nx,ny,nw,nh);w.x=res.x;w.y=res.y;w.w=res.w;w.h=res.h;}
-  render();
+  updateWinDOMRaf(w);
 }
 document.addEventListener('mouseup',function(){
   unlockPageDrag();
@@ -492,7 +509,7 @@ window.addEventListener('pointercancel',function(){drag=null;lsDraw=false;unlock
 document.addEventListener('selectstart',function(e){if(drag||lsDraw)stopNative(e);});
 document.addEventListener('contextmenu',function(e){if(drag||lsDraw)stopNative(e);});
 VP.addEventListener('contextmenu',function(e){e.preventDefault();});
-function drawLasso(){lx.clearRect(0,0,dW,dH);var x1=Math.min(ls0.x,ls1.x),y1=Math.min(ls0.y,ls1.y),w=Math.abs(ls1.x-ls0.x),h=Math.abs(ls1.y-ls0.y);lx.strokeStyle='rgba(40,200,130,.9)';lx.lineWidth=2;lx.setLineDash([5,3]);lx.strokeRect(x1,y1,w,h);lx.fillStyle='rgba(40,200,130,.1)';lx.fillRect(x1,y1,w,h);}
+function drawLasso(){lx.clearRect(0,0,dW,dH);var x1=Math.min(ls0.x,ls1.x),y1=Math.min(ls0.y,ls1.y),w=Math.abs(ls1.x-ls0.x),h=Math.abs(ls1.y-ls0.y);lx.strokeStyle='rgba(40,200,130,.9)';lx.lineWidth=2;lx.setLineDash([]);lx.strokeRect(x1,y1,w,h);lx.fillStyle='rgba(40,200,130,.12)';lx.fillRect(x1,y1,w,h);}
 function updSt(){var st=document.getElementById('st');if(!img){st.textContent='';return;}if(mode==='grid'||mode==='lines'){var c=vL.length+1,r=hL.length+1;st.textContent=c+'列×'+r+'行='+(c*r)+'パーツ';}else if(lasso)st.textContent='🖱 ドラッグで囲む — '+wins.length+'個';else{var lk=wins.filter(function(w){return w.locked;}).length;st.textContent='窓 '+wins.length+'個'+(lk?' (ロック '+lk+'個)':'');}}
 
 function buildParts(){
