@@ -462,7 +462,7 @@ var HIT=40,VIS=14;
 h.addEventListener('mousedown',function(e){stopNative(e);startResize(e.clientX,e.clientY);});
 h.addEventListener('pointerdown',function(e){if(e.pointerType==='mouse')return;e.preventDefault();e.stopPropagation();capturePointer(h,e);lockPageDrag();startResize(e.clientX,e.clientY);});el.appendChild(h);});
 // 辺ハンドル（スマホ向け大きめ）
-['top','bottom','left','right'].forEach(function(edge){var h=document.createElement('div'),isH=edge==='top'||edge==='bottom';if(isH){h.style.cssText='position:absolute;left:22px;right:22px;height:14px;cursor:'+(w.locked?'not-allowed':(edge==='top'?'n':'s')+'-resize')+';touch-action:none;';h.style[edge]='-7px';}else{h.style.cssText='position:absolute;top:22px;bottom:22px;width:14px;cursor:'+(w.locked?'not-allowed':(edge==='left'?'w':'e')+'-resize')+';touch-action:none;';h.style[edge]='-7px';}function startEdge(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'edge',wid:w.id,edge:edge,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
+['top','bottom','left','right'].forEach(function(edge){var h=document.createElement('div'),isH=edge==='top'||edge==='bottom';var HIT=36;if(isH){h.style.cssText='position:absolute;left:20px;right:20px;height:'+HIT+'px;cursor:'+(w.locked?'not-allowed':(edge==='top'?'n':'s')+'-resize')+';touch-action:none;z-index:3;';h.style[edge]=-(HIT/2)+'px';}else{h.style.cssText='position:absolute;top:20px;bottom:20px;width:'+HIT+'px;cursor:'+(w.locked?'not-allowed':(edge==='left'?'w':'e')+'-resize')+';touch-action:none;z-index:3;';h.style[edge]=-(HIT/2)+'px';}function startEdge(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'edge',wid:w.id,edge:edge,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
 h.addEventListener('mousedown',function(e){stopNative(e);startEdge(e.clientX,e.clientY);});
 h.addEventListener('pointerdown',function(e){if(e.pointerType==='mouse')return;e.preventDefault();e.stopPropagation();capturePointer(h,e);lockPageDrag();startEdge(e.clientX,e.clientY);});el.appendChild(h);});
 // 本体：移動
@@ -543,7 +543,15 @@ function applyDrag(cx,cy){
   var w=null;for(var i=0;i<wins.length;i++){if(wins[i].id===drag.wid){w=wins[i];break;}}if(!w)return;
   var dx=cx-drag.startX,dy=cy-drag.startY,nx,ny,nw,nh,res,rw,rh;
   if(drag.kind==='move'){res=cMove(w,drag.ox+dx,drag.oy+dy,w.w,w.h);w.x=res.x;w.y=res.y;}
-  else if(drag.kind==='corner'){nx=w.x;ny=w.y;nw=w.w;nh=w.h;if(drag.type==='se'){nw=Math.max(20,drag.ow+dx);nh=Math.max(20,drag.oh+dy);}else if(drag.type==='sw'){rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;nh=Math.max(20,drag.oh+dy);}else if(drag.type==='ne'){nw=Math.max(20,drag.ow+dx);rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}else{rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}res=cSize(w,nx,ny,nw,nh);w.x=res.x;w.y=res.y;w.w=res.w;w.h=res.h;}
+  else if(drag.kind==='corner'){
+    var left=drag.ox,top=drag.oy,right=drag.ox+drag.ow,bottom=drag.oy+drag.oh;
+    nx=left;ny=top;nw=drag.ow;nh=drag.oh;
+    if(drag.type==='se'){nw=Math.max(20,Math.min(dW-left,drag.ow+dx));nh=Math.max(20,Math.min(dH-top,drag.oh+dy));}
+    else if(drag.type==='sw'){nx=Math.max(0,Math.min(right-20,left+dx));nw=right-nx;nh=Math.max(20,Math.min(dH-top,drag.oh+dy));}
+    else if(drag.type==='ne'){nw=Math.max(20,Math.min(dW-left,drag.ow+dx));ny=Math.max(0,Math.min(bottom-20,top+dy));nh=bottom-ny;}
+    else if(drag.type==='nw'){nx=Math.max(0,Math.min(right-20,left+dx));nw=right-nx;ny=Math.max(0,Math.min(bottom-20,top+dy));nh=bottom-ny;}
+    res=cSize(w,nx,ny,nw,nh);w.x=res.x;w.y=res.y;w.w=res.w;w.h=res.h;
+  }
   else if(drag.kind==='edge'){nx=w.x;ny=w.y;nw=w.w;nh=w.h;if(drag.edge==='right')nw=Math.max(20,drag.ow+dx);else if(drag.edge==='bottom')nh=Math.max(20,drag.oh+dy);else if(drag.edge==='left'){rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;}else{rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}res=cSize(w,nx,ny,nw,nh);w.x=res.x;w.y=res.y;w.w=res.w;w.h=res.h;}
   updateWinDOMRaf(w);
 }
