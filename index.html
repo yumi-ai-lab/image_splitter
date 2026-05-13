@@ -16,13 +16,6 @@ body.dragging,body.dragging *{user-select:none!important;-webkit-user-select:non
 #dz p{color:#888;font-size:14px;margin-top:6px}
 #dz input{display:none}
 
-/* AI step banner */
-#ai-step{display:none;background:#fffbe6;border:1px solid #f0d060;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#555}
-#ai-step .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-#ai-step strong{color:#333}
-#json-input{flex:1;min-width:160px;height:32px;font-size:13px;padding:0 8px;font-family:monospace;border:1px solid #ddd;border-radius:6px}
-#json-input.ok{border-color:#2c8;background:#f0fff8}
-
 #tb{display:none;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .tg{display:flex;border:1px solid #ddd;border-radius:8px;overflow:hidden}
 .tab{padding:6px 13px;font-size:13px;cursor:pointer;border:none;background:transparent;color:#888;font-family:inherit}
@@ -78,18 +71,6 @@ select.s{height:30px;font-size:13px;border:1px solid #ddd;border-radius:6px;padd
   <p>クリックまたはドラッグ&ドロップ</p>
   <p style="font-size:12px;margin-top:2px">PNG / JPG / WebP</p>
   <input id="fin" type="file" accept="image/*">
-</div>
-
-<div id="ai-step">
-  <div class="row" style="margin-bottom:8px">
-    <span>① この画像を<strong>このチャットに送信</strong>するとClaudeが窓座標JSONを返します</span>
-    <button class="b sm" onclick="copyPrompt()">📋 プロンプトをコピー</button>
-  </div>
-  <div class="row">
-    <span style="white-space:nowrap">② JSONを貼り付け:</span>
-    <input id="json-input" type="text" placeholder='{"windows":[...]}' oninput="tryAutoApply(this.value)">
-    <button class="b sm p" onclick="applyJSON()">適用</button>
-  </div>
 </div>
 
 <div id="tb">
@@ -362,50 +343,11 @@ function load(f){
     document.getElementById('tb').style.display='flex';
     document.getElementById('wrap-viewport').style.display='block';
     document.getElementById('acts').style.display='flex';
-    document.getElementById('ai-step').style.display='block';
-    document.getElementById('json-input').value='';
-    document.getElementById('json-input').classList.remove('ok');
     updLassoBtn();render();updSt();
     setTimeout(fitToView,30);
     URL.revokeObjectURL(url);
   };
   i.onerror=function(){alert('画像読み込み失敗');};i.src=url;
-}
-
-var PROMPT='この画像の主要な被写体・領域を2〜6個特定し、JSONのみ返してください（説明・```不要）:\n{"windows":[{"label":"日本語","x":数値,"y":数値,"w":数値,"h":数値}]}\n制約: 幅__W__px 高さ__H__px、各窓は画像内、重なりなし(4px余白)、各辺40px以上';
-
-function copyPrompt(){
-  var pr=PROMPT.replace('__W__',dW).replace('__H__',dH);
-  navigator.clipboard.writeText(pr).then(function(){
-    document.querySelector('#ai-step .row span').textContent='① コピーしました！画像と一緒にチャットに送信してください';
-  }).catch(function(){alert('コピー失敗。手動でコピーしてください:\n\n'+pr);});
-}
-
-function tryAutoApply(val){
-  val=val.trim();
-  if(!val)return;
-  try{
-    var p=JSON.parse(val.replace(/```json|```/g,'').trim());
-    if(p.windows&&Array.isArray(p.windows)&&p.windows.length>0){
-      document.getElementById('json-input').classList.add('ok');
-    }
-  }catch(e){document.getElementById('json-input').classList.remove('ok');}
-}
-
-function applyJSON(){
-  var raw=document.getElementById('json-input').value.trim();
-  if(!raw)return;
-  try{
-    var p=JSON.parse(raw.replace(/```json|```/g,'').trim());
-    if(!p.windows||!Array.isArray(p.windows))throw 0;
-    wins=[];nid=1;
-    p.windows.forEach(function(pw){
-      var x=Math.max(0,Math.min(dW-40,Math.round(pw.x))),y=Math.max(0,Math.min(dH-40,Math.round(pw.y)));
-      wins.push({id:nid++,x:x,y:y,w:Math.max(40,Math.min(dW-x,Math.round(pw.w))),h:Math.max(40,Math.min(dH-y,Math.round(pw.h))),locked:false,label:pw.label||''});
-    });
-    render();updSt();
-    document.getElementById('ai-step').style.display='none';
-  }catch(e){alert('JSONパース失敗');}
 }
 
 function setMode(m,btn){
@@ -454,8 +396,7 @@ function mkLine(type,pos,idx){
 }
 function mkWin(w){var col=w.locked?'#f90':'#2c8';var el=document.createElement('div');el.dataset.wid=w.id;el.style.cssText='position:absolute;left:'+w.x+'px;top:'+w.y+'px;width:'+w.w+'px;height:'+w.h+'px;border:2px solid '+col+';background:'+(w.locked?'rgba(255,160,0,.06)':'rgba(40,200,130,.08)')+';cursor:'+(w.locked?'not-allowed':'move')+';touch-action:none;user-select:none;';if(w.label){var lb=document.createElement('div');lb.textContent=w.label;lb.style.cssText='position:absolute;bottom:3px;left:4px;right:22px;font-size:11px;color:'+(w.locked?'#c80':'#080')+';font-weight:600;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';el.appendChild(lb);}var idl=document.createElement('div');idl.textContent='W'+w.id;idl.style.cssText='position:absolute;top:2px;left:4px;font-size:11px;font-weight:600;color:'+(w.locked?'#c80':'#080')+';pointer-events:none;';el.appendChild(idl);var lk=document.createElement('div');lk.textContent=w.locked?'🔒':'🔓';
 lk.style.cssText='position:absolute;top:-10px;right:32px;width:28px;height:28px;font-size:16px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.9);border:1px solid #ddd;border-radius:50%;cursor:pointer;touch-action:none;z-index:5;';
-lk.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();});
-lk.addEventListener('pointerup',function(e){e.preventDefault();e.stopPropagation();w.locked=!w.locked;render();});el.appendChild(lk);var cp=document.createElement('div');cp.textContent='⧉';cp.title='複製';cp.style.cssText='position:absolute;top:1px;right:19px;font-size:13px;cursor:pointer;color:#048;font-weight:700;line-height:1;';cp.addEventListener('mousedown',function(e){e.stopPropagation();});cp.addEventListener('click',function(e){e.stopPropagation();var ox=Math.min(w.x+12,dW-w.w),oy=Math.min(w.y+12,dH-w.h);wins.push({id:nid++,x:ox,y:oy,w:w.w,h:w.h,locked:false,label:w.label});render();updSt();});el.appendChild(cp);var dl=document.createElement('div');dl.textContent='✕';dl.style.cssText='position:absolute;top:1px;right:3px;font-size:12px;cursor:pointer;color:#c00;font-weight:700;';dl.addEventListener('mousedown',function(e){e.stopPropagation();});dl.addEventListener('click',function(e){e.stopPropagation();wins=wins.filter(function(x){return x.id!==w.id;});render();updSt();});el.appendChild(dl);
+lk.addEventListener('pointerdown',function(e){e.preventDefault();e.stopPropagation();w.locked=!w.locked;render();});el.appendChild(lk);var cp=document.createElement('div');cp.textContent='⧉';cp.title='複製';cp.style.cssText='position:absolute;top:1px;right:19px;font-size:13px;cursor:pointer;color:#048;font-weight:700;line-height:1;';cp.addEventListener('mousedown',function(e){e.stopPropagation();});cp.addEventListener('click',function(e){e.stopPropagation();var ox=Math.min(w.x+12,dW-w.w),oy=Math.min(w.y+12,dH-w.h);wins.push({id:nid++,x:ox,y:oy,w:w.w,h:w.h,locked:false,label:w.label});render();updSt();});el.appendChild(cp);var dl=document.createElement('div');dl.textContent='✕';dl.style.cssText='position:absolute;top:1px;right:3px;font-size:12px;cursor:pointer;color:#c00;font-weight:700;';dl.addEventListener('mousedown',function(e){e.stopPropagation();});dl.addEventListener('click',function(e){e.stopPropagation();wins=wins.filter(function(x){return x.id!==w.id;});render();updSt();});el.appendChild(dl);
 // コーナーハンドル（スマホ向け大きめ）
 var HIT=40,VIS=14;
 [{cx:0,cy:0,t:'nw'},{cx:w.w,cy:0,t:'ne'},{cx:0,cy:w.h,t:'sw'},{cx:w.w,cy:w.h,t:'se'}].forEach(function(c){var h=document.createElement('div');h.dataset.corner=c.t;h.style.cssText='position:absolute;left:'+(c.cx-HIT/2)+'px;top:'+(c.cy-HIT/2)+'px;width:'+HIT+'px;height:'+HIT+'px;cursor:'+(w.locked?'not-allowed':c.t+'-resize')+';touch-action:none;z-index:4;';var dot=document.createElement('div');dot.style.cssText='position:absolute;left:50%;top:50%;width:'+VIS+'px;height:'+VIS+'px;transform:translate(-50%,-50%);border-radius:50%;background:#fff;border:2px solid '+col+';pointer-events:none;';h.appendChild(dot);function startResize(cx,cy){if(w.locked)return;lockPageDrag();var cc=vpToCanvas(cx,cy);drag={kind:'corner',wid:w.id,type:c.t,startX:cc.x,startY:cc.y,ox:w.x,oy:w.y,ow:w.w,oh:w.h};}
