@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:sans-serif;padding:12px;background:transparent;overscroll-behavior:none;touch-action:manipulation;}
@@ -487,10 +488,7 @@ el.addEventListener('touchstart',function(e){
     var ts=getTouches(e);
     _winPinchStart={id:w.id,dist:dist2(ts[0],ts[1]),cx:w.x+w.w/2,cy:w.y+w.h/2,x:w.x,y:w.y,w:w.w,h:w.h};
     drag=null;lsDraw=false;lockPageDrag();
-    return;
   }
-  if(e.target!==el)return;
-  e.preventDefault();startMove(e.touches[0].clientX,e.touches[0].clientY);
 },{passive:false});
 OV.appendChild(el);}
 
@@ -503,11 +501,13 @@ OV.addEventListener('pointerdown',function(e){
   _pressTimer=setTimeout(function(){
     if(!_pressStart)return;
     var x=_pressStart.x,y=_pressStart.y;
-    var INIT=120;
-    _pressWin={id:nid++,x:Math.max(0,Math.min(dW-INIT,x-INIT/2)),y:Math.max(0,Math.min(dH-INIT,y-INIT/2)),w:INIT,h:INIT,locked:false,label:''};
+    var cw=Math.round(dW*0.25),ch=Math.round(dH*0.25);
+    _pressWin={id:nid++,x:Math.max(0,Math.min(dW-cw,x-cw/2)),y:Math.max(0,Math.min(dH-ch,y-ch/2)),w:cw,h:ch,locked:false,label:''};
     wins.push(_pressWin);
     render();
-    drag={kind:'createWin',wid:_pressWin.id,startX:x,startY:y};
+    // createWinではなく移動モードで開始
+    var cc=vpToCanvas(_pressStart.cx,_pressStart.cy);
+    drag={kind:'move',wid:_pressWin.id,startX:cc.x,startY:cc.y,ox:_pressWin.x,oy:_pressWin.y,ow:_pressWin.w,oh:_pressWin.h};
     lockPageDrag();
   },280);
 },{passive:false});
@@ -541,14 +541,6 @@ document.addEventListener('touchmove',function(e){
 function applyDrag(cx,cy){
   if(drag.kind==='line'){if(drag.type==='v')vL[drag.idx]=Math.max(1,Math.min(dW-1,Math.round(cx)));else hL[drag.idx]=Math.max(1,Math.min(dH-1,Math.round(cy)));renderRaf();return;}
   var w=null;for(var i=0;i<wins.length;i++){if(wins[i].id===drag.wid){w=wins[i];break;}}if(!w)return;
-  if(drag.kind==='createWin'){
-    var x1=Math.min(drag.startX,cx),y1=Math.min(drag.startY,cy);
-    var x2=Math.max(drag.startX,cx),y2=Math.max(drag.startY,cy);
-    w.x=Math.max(0,x1);w.y=Math.max(0,y1);
-    w.w=Math.max(24,Math.min(dW-w.x,x2-x1));
-    w.h=Math.max(24,Math.min(dH-w.y,y2-y1));
-    updateWinDOMRaf(w);return;
-  }
   var dx=cx-drag.startX,dy=cy-drag.startY,nx,ny,nw,nh,res,rw,rh;
   if(drag.kind==='move'){res=cMove(w,drag.ox+dx,drag.oy+dy,w.w,w.h);w.x=res.x;w.y=res.y;}
   else if(drag.kind==='corner'){nx=w.x;ny=w.y;nw=w.w;nh=w.h;if(drag.type==='se'){nw=Math.max(20,drag.ow+dx);nh=Math.max(20,drag.oh+dy);}else if(drag.type==='sw'){rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;nh=Math.max(20,drag.oh+dy);}else if(drag.type==='ne'){nw=Math.max(20,drag.ow+dx);rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}else{rw=Math.max(20,drag.ow-dx);nx=drag.ox+(drag.ow-rw);nw=rw;rh=Math.max(20,drag.oh-dy);ny=drag.oy+(drag.oh-rh);nh=rh;}res=cSize(w,nx,ny,nw,nh);w.x=res.x;w.y=res.y;w.w=res.w;w.h=res.h;}
@@ -565,18 +557,11 @@ document.addEventListener('touchcancel',function(){unlockPageDrag();if(drag){dra
 document.addEventListener('pointerup',function(e){
   if(_pressTimer){clearTimeout(_pressTimer);_pressTimer=null;_pressStart=null;}
   if(_deleteTimer){clearTimeout(_deleteTimer);_deleteTimer=null;_deleteStart=null;}
-  if(drag&&drag.kind==='createWin'){
-    var w=null;for(var i=0;i<wins.length;i++){if(wins[i].id===drag.wid){w=wins[i];break;}}
-    drag=null;_pressWin=null;
-    if(w&&w.w<10&&w.h<10){wins=wins.filter(function(x){return x.id!==w.id;});}
-    render();updSt();unlockPageDrag();return;
-  }
   unlockPageDrag();if(drag){drag=null;updSt();}
 });
 document.addEventListener('pointercancel',function(){
   if(_pressTimer){clearTimeout(_pressTimer);_pressTimer=null;_pressStart=null;}
   if(_deleteTimer){clearTimeout(_deleteTimer);_deleteTimer=null;_deleteStart=null;}
-  if(drag&&drag.kind==='createWin'){drag=null;_pressWin=null;render();updSt();}
   unlockPageDrag();if(drag){drag=null;updSt();}
 });
 window.addEventListener('pointercancel',function(){drag=null;lsDraw=false;unlockPageDrag();});
@@ -644,4 +629,5 @@ async function startDL(){
   dlog.textContent='✓ '+res.parts.length+'個';btn.disabled=false;
 }
 </script>
+
 </body></html>
